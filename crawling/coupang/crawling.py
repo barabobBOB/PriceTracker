@@ -6,20 +6,51 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from fake_useragent import UserAgent
+import psycopg2
+
 
 class CoupangCrawler:
-    def __init__(self, categories_id, max_pages=10):
+    def __init__(self, categories_id, db_config, max_pages=10):
         self.categories_id = categories_id
         self.max_pages = max_pages
+        self.db_config = db_config
         self.chrome_options = Options()
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-dev-shm-usage")
         self.chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         self.chrome_options.add_argument(f"user-agent={UserAgent().random}")
         self.driver = None
+        self.conn = None
+        self.cursor = None
 
     def start_driver(self):
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=self.chrome_options)
+
+    def start_db(self):
+        self.conn = psycopg2.connect(**self.db_config)
+        self.cursor = self.conn.cursor()
+
+    def close_db(self):
+        if self.cursor:
+            self.cursor.close()
+        if self.conn:
+            self.conn.close()
+
+    def save_to_db(self, data):
+        query = """
+        INSERT INTO 
+        coupang_products 
+        (product_id, 
+        title, 
+        price, 
+        per_price, 
+        star, 
+        review_cnt, 
+        category_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        self.cursor.execute(query, data)
+        self.conn.commit()
 
     def crawl_category(self, category_id):
         self.start_driver()
@@ -54,9 +85,10 @@ class CoupangCrawler:
                     per_price = item.find_element(By.CLASS_NAME, 'unit-price').text.strip()
                     star = item.find_element(By.CLASS_NAME, 'rating').text.strip()
                     review_cnt = item.find_element(By.CLASS_NAME, 'rating-total-count').text.strip()
-                    print(number, title, price, per_price, star, review_cnt)
+                    data = (number, title, price, per_price, star, review_cnt, category_id)
+                    self.save_to_db(data)
                 except Exception as e:
-                    # print(f"상품 정보 추출 오류: {e}")
+                    print(f"상품 정보 추출 오류: {e}")
                     continue
 
             try:
@@ -75,13 +107,14 @@ class CoupangCrawler:
         self.driver.quit()
 
     def crawl(self):
+        self.start_db()
         for category_id in self.categories_id:
             self.crawl_category(category_id)
+        self.close_db()
 
     def close(self):
         if self.driver:
             self.driver.quit()
-
 
 if __name__ == '__main__':
     categories_id = [
@@ -96,6 +129,14 @@ if __name__ == '__main__':
         194744, 194745, 194746, 194812
     ]
 
-    crawler = CoupangCrawler(categories_id)
+    db_config = {
+        'dbname': 'price_tracker',
+        'user': 'postgres',
+        'password': 'postgres',
+        'host': 'localhost',
+        'port': '5460'
+    }
+
+    crawler = CoupangCrawler(categories_id, db_config, max_pages=10)
     crawler.crawl()
     crawler.close()
