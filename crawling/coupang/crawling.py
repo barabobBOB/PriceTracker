@@ -5,30 +5,30 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import time
 
 
 class CoupangCrawler:
-    def __init__(self, categories_id):
+    def __init__(self, categories_id, max_pages=5):
         self.categories_id = categories_id
+        self.max_pages = max_pages
         self.chrome_options = Options()
         self.chrome_options.add_argument("--no-sandbox")
         self.chrome_options.add_argument("--disable-dev-shm-usage")
         self.chrome_options.add_argument(
             "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-        self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=self.chrome_options)
 
     def start_driver(self):
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=self.chrome_options)
 
-    def crawl(self):
-        for category_id in self.categories_id:
-            self.start_driver()
-
+    def crawl_category(self, category_id):
+        for page in range(1, self.max_pages + 1):
+            self.start_driver()  # 페이지 로드마다 WebDriver 재시작
             baseurl = (f'https://www.coupang.com/np/categories/{category_id}'
                        f'?listSize=120&brand=&offerCondition=&filterType='
                        f'&isPriceRange=false&minPrice=&maxPrice=&channel=user'
                        f'&fromComponent=N&selectedPlpKeepFilter=&sorter=bestAsc&filter=&component=194186&rating=0'
-                       f'&page=1')
+                       f'&page={page}')
 
             self.driver.get(baseurl)
 
@@ -38,11 +38,17 @@ class CoupangCrawler:
                     EC.presence_of_element_located((By.CLASS_NAME, 'baby-product-link'))
                 )
             except Exception as e:
-                print(f"페이지 로드 오류: 카테고리 {category_id}")
+                print(f"페이지 로드 오류: 카테고리 {category_id}, 페이지 {page}")
                 print(f"Error: {e}")
-                continue
+                self.driver.quit()
+                break
 
             items = self.driver.find_elements(By.CLASS_NAME, 'baby-product-link')
+            if not items:
+                print(f"더 이상 항목이 없습니다: 카테고리 {category_id}, 페이지 {page}")
+                self.driver.quit()
+                break
+
             cnt = 1
             for item in items:
                 try:
@@ -68,8 +74,15 @@ class CoupangCrawler:
                     print(f"상품 정보 추출 오류: {e}")
                     continue
 
+            self.driver.quit()
+
+    def crawl(self):
+        for category_id in self.categories_id:
+            self.crawl_category(category_id)
+
     def close(self):
         self.driver.quit()
+
 
 if __name__ == '__main__':
     categories_id = [
