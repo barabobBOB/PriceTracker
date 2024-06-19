@@ -1,37 +1,43 @@
-import logging
+import re
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from fake_useragent import UserAgent
+
+from crawling.config.config import setup_logging, set_chrome_options
+
+
+def construct_url(category_id):
+    return (f'https://www.coupang.com/np/categories/{category_id}'
+            f'?listSize=120&brand=&offerCondition=&filterType='
+            f'&isPriceRange=false&minPrice=&maxPrice=&channel=user'
+            f'&fromComponent=N&selectedPlpKeepFilter=&sorter=bestAsc&filter=&component=194186&rating=0')
+
+
+def setup_categories_id():
+    return [
+        194286, 194287, 194290, 194291, 194292, 194296, 194302, 194303, 194310, 194311,
+        194312, 194313, 194319, 194322, 194324, 194328, 194329, 194330, 194333, 194334,
+        194335, 194340, 194341, 194344, 194436, 194437, 194438, 194447, 194448, 194456,
+        194460, 194464, 194465, 194476, 194482, 194487, 194488, 194492, 194507, 194514,
+        194515, 194520, 194524, 194527, 194539, 194540, 194561, 194562, 194564, 194571,
+        194572, 194577, 194578, 194579, 194586, 194587, 194588, 194589, 194590, 194694,
+        194695, 194698, 194699, 194700, 194701, 194706, 194707, 194708, 194711, 194712,
+        194713, 194730, 194731, 194732, 194733, 194736, 194737, 194738, 194742, 194743,
+        194744, 194745, 194746, 194812
+    ]
 
 
 class CoupangCrawler:
-    def __init__(self, categories_id, max_pages=10, log_file='crawler.log'):
+    def __init__(self, max_pages=10):
+        self.categories_id = setup_categories_id()
         self.driver = None
-        self.categories_id = categories_id
+        self.logger = setup_logging()
         self.max_pages = max_pages
-        self.chrome_options = self.set_chrome_options()
-        self.setup_logging(log_file)
-
-    def setup_logging(self, log_file):
-        logging.basicConfig(
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            level=logging.INFO
-        )
-        self.logger = logging.getLogger(__name__)
-
-    def set_chrome_options(self):
-        chrome_options = Options()
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_argument(f"user-agent={UserAgent().random}")
-        return chrome_options
+        self.chrome_options = set_chrome_options()
 
     def start_driver(self):
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=self.chrome_options)
@@ -46,7 +52,7 @@ class CoupangCrawler:
 
     def crawl_category(self, category_id):
         self.start_driver()
-        base_url = self.construct_url(category_id)
+        base_url = construct_url(category_id)
         self.driver.get(base_url)
         page = 1
 
@@ -70,12 +76,6 @@ class CoupangCrawler:
 
         self.close_driver()
 
-    def construct_url(self, category_id):
-        return (f'https://www.coupang.com/np/categories/{category_id}'
-                f'?listSize=120&brand=&offerCondition=&filterType='
-                f'&isPriceRange=false&minPrice=&maxPrice=&channel=user'
-                f'&fromComponent=N&selectedPlpKeepFilter=&sorter=bestAsc&filter=&component=194186&rating=0')
-
     def load_page(self, category_id, page):
         try:
             WebDriverWait(self.driver, 20).until(
@@ -96,10 +96,20 @@ class CoupangCrawler:
                 number = item.get_attribute('data-product-id')
                 title = item.find_element(By.CLASS_NAME, 'name').text.strip()
                 price = item.find_element(By.CLASS_NAME, 'price-value').text.strip()
-                per_price = item.find_element(By.CLASS_NAME, 'unit-price').text.strip()
                 star = item.find_element(By.CLASS_NAME, 'rating').text.strip()
+
+                # per_price에서 괄호와 "100g당", "원" 제거
+                per_price = item.find_element(By.CLASS_NAME, 'unit-price').text.strip()
+                per_price = re.sub(r'\(100g당\s*|\s*원\)|\(|\)', '', per_price).strip()
+
+                # review_cnt에서 괄호 제거
                 review_cnt = item.find_element(By.CLASS_NAME, 'rating-total-count').text.strip()
-                self.logger.info(f"number: {number}, title: {title}, price: {price}, per_price: {per_price}, star: {star}, review_cnt: {review_cnt}")
+                review_cnt = re.sub(r'[\(\)]', '', review_cnt).strip()
+
+                self.logger.info(
+                    f"number: {number}, title: {title}, price: {price}, per_price: {per_price}, star: {star}, "
+                    f"review_cnt: {review_cnt}")
+
             except Exception:
                 # 리뷰, 별점 등의 정보가 없는 경우
                 continue
@@ -119,19 +129,8 @@ class CoupangCrawler:
             self.logger.error(f"Error: {e}")
             return False
 
-if __name__ == '__main__':
-    categories_id = [
-        194286, 194287, 194290, 194291, 194292, 194296, 194302, 194303, 194310, 194311,
-        194312, 194313, 194319, 194322, 194324, 194328, 194329, 194330, 194333, 194334,
-        194335, 194340, 194341, 194344, 194436, 194437, 194438, 194447, 194448, 194456,
-        194460, 194464, 194465, 194476, 194482, 194487, 194488, 194492, 194507, 194514,
-        194515, 194520, 194524, 194527, 194539, 194540, 194561, 194562, 194564, 194571,
-        194572, 194577, 194578, 194579, 194586, 194587, 194588, 194589, 194590, 194694,
-        194695, 194698, 194699, 194700, 194701, 194706, 194707, 194708, 194711, 194712,
-        194713, 194730, 194731, 194732, 194733, 194736, 194737, 194738, 194742, 194743,
-        194744, 194745, 194746, 194812
-    ]
 
-    crawler = CoupangCrawler(categories_id)
+if __name__ == '__main__':
+    crawler = CoupangCrawler()
     crawler.crawl()
-    crawler.close()
+    crawler.close_driver()
