@@ -8,6 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from crawling.config.config import setup_logging, set_chrome_options
+from crawling.database.manager import DatabaseManager, db_config
 
 
 def construct_url(category_id):
@@ -38,6 +39,7 @@ class CoupangCrawler:
         self.logger = setup_logging()
         self.max_pages = max_pages
         self.chrome_options = set_chrome_options()
+        self.database_manager = DatabaseManager(db_config=db_config)
 
     def start_driver(self):
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=self.chrome_options)
@@ -47,8 +49,12 @@ class CoupangCrawler:
             self.driver.quit()
 
     def crawl(self):
-        for category_id in self.categories_id:
-            self.crawl_category(category_id)
+        try:
+            self.database_manager.connect()
+            for category_id in self.categories_id:
+                self.crawl_category(category_id)
+        finally:
+            self.database_manager.close()
 
     def crawl_category(self, category_id):
         self.start_driver()
@@ -66,7 +72,7 @@ class CoupangCrawler:
                 self.logger.info(f"더 이상 항목이 없습니다: 카테고리 {category_id}, 페이지 {page}")
                 break
 
-            self.extract_items(items)
+            self.extract_items(items, category_id)
 
             if not self.go_to_next_page(page):
                 self.logger.info(f"다음 페이지로 이동할 수 없습니다: 카테고리 {category_id}, 페이지 {page}")
@@ -90,25 +96,37 @@ class CoupangCrawler:
     def get_items(self):
         return self.driver.find_elements(By.CLASS_NAME, 'baby-product-link')
 
-    def extract_items(self, items):
+    def extract_items(self, items, category_id):
         for item in items:
             try:
-                number = item.get_attribute('data-product-id')
+                product_id = item.get_attribute('data-product-id')
                 title = item.find_element(By.CLASS_NAME, 'name').text.strip()
                 price = item.find_element(By.CLASS_NAME, 'price-value').text.strip()
                 star = item.find_element(By.CLASS_NAME, 'rating').text.strip()
 
-                # per_price에서 괄호와 "100g당", "원" 제거
+                # per_price 괄호와 "100g당", "원" 제거
                 per_price = item.find_element(By.CLASS_NAME, 'unit-price').text.strip()
                 per_price = re.sub(r'\(100g당\s*|\s*원\)|\(|\)', '', per_price).strip()
 
-                # review_cnt에서 괄호 제거
-                review_cnt = item.find_element(By.CLASS_NAME, 'rating-total-count').text.strip()
-                review_cnt = re.sub(r'[\(\)]', '', review_cnt).strip()
+                # review_count 괄호 제거
+                review_count = item.find_element(By.CLASS_NAME, 'rating-total-count').text.strip()
+                review_count = re.sub(r'[\(\)]', '', review_count).strip()
+
+                # price와 per_price에서 쉼표 제거
+                price = int(price.replace(',', ''))
+                per_price = int(per_price.replace(',', ''))
 
                 self.logger.info(
-                    f"number: {number}, title: {title}, price: {price}, per_price: {per_price}, star: {star}, "
-                    f"review_cnt: {review_cnt}")
+                    f"category_id: {category_id}, product_id: {product_id}, title: {title}, price: {price}, "
+                    f"per_price: {per_price}, star: {star}, review_cnt: {review_count}")
+
+                self.database_manager.insert_product(int(product_id),
+                                                     title,
+                                                     price,
+                                                     per_price,
+                                                     float(star),
+                                                     int(review_count),
+                                                     category_id)
 
             except Exception:
                 # 리뷰, 별점 등의 정보가 없는 경우
