@@ -1,3 +1,5 @@
+import logging
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -9,11 +11,19 @@ from fake_useragent import UserAgent
 
 
 class CoupangCrawler:
-    def __init__(self, categories_id, max_pages=10):
+    def __init__(self, categories_id, max_pages=10, log_file='crawler.log'):
         self.driver = None
         self.categories_id = categories_id
         self.max_pages = max_pages
         self.chrome_options = self.set_chrome_options()
+        self.setup_logging(log_file)
+
+    def setup_logging(self, log_file):
+        logging.basicConfig(
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            level=logging.INFO
+        )
+        self.logger = logging.getLogger(__name__)
 
     def set_chrome_options(self):
         chrome_options = Options()
@@ -47,13 +57,13 @@ class CoupangCrawler:
             items = self.get_items()
 
             if not items:
-                print(f"더 이상 항목이 없습니다: 카테고리 {category_id}, 페이지 {page}")
+                self.logger.info(f"더 이상 항목이 없습니다: 카테고리 {category_id}, 페이지 {page}")
                 break
 
             self.extract_items(items)
 
             if not self.go_to_next_page(page):
-                print(f"다음 페이지로 이동할 수 없습니다: 카테고리 {category_id}, 페이지 {page}")
+                self.logger.info(f"다음 페이지로 이동할 수 없습니다: 카테고리 {category_id}, 페이지 {page}")
                 break
 
             page += 1
@@ -73,8 +83,8 @@ class CoupangCrawler:
             )
             return True
         except Exception as e:
-            print(f"페이지 로드 오류: 카테고리 {category_id}, 페이지 {page}")
-            print(f"Error: {e}")
+            self.logger.error(f"페이지 로드 오류: 카테고리 {category_id}, 페이지 {page}")
+            self.logger.error(f"Error: {e}")
             return False
 
     def get_items(self):
@@ -89,7 +99,7 @@ class CoupangCrawler:
                 per_price = item.find_element(By.CLASS_NAME, 'unit-price').text.strip()
                 star = item.find_element(By.CLASS_NAME, 'rating').text.strip()
                 review_cnt = item.find_element(By.CLASS_NAME, 'rating-total-count').text.strip()
-                print(number, title, price, per_price, star, review_cnt)
+                self.logger.info(f"number: {number}, title: {title}, price: {price}, per_price: {per_price}, star: {star}, review_cnt: {review_cnt}")
             except Exception:
                 # 리뷰, 별점 등의 정보가 없는 경우
                 continue
@@ -105,11 +115,9 @@ class CoupangCrawler:
             )
             return True
         except Exception as e:
-            print(f"다음 페이지로 이동할 수 없습니다: 페이지 {page}")
-            print(f"Error: {e}")
+            self.logger.error(f"다음 페이지로 이동할 수 없습니다: 페이지 {page}")
+            self.logger.error(f"Error: {e}")
             return False
-
-
 
 if __name__ == '__main__':
     categories_id = [
