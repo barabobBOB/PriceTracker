@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5460:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=price_tracker
+    volumes:
+      - price_tracker_db:/var/lib/postgresql/data
+    networks:
+      - price_tracker
+
+volumes:
+  price_tracker_db:
+
+networks:
+  price_tracker:
+    driver: bridge
