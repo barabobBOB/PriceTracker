@@ -1,10 +1,8 @@
 import logging
 import random
 import time
-import requests
 
 from fake_useragent import UserAgent
-from bs4 import BeautifulSoup
 
 def set_header() -> dict[str, str]:
     return {
