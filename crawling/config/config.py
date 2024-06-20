@@ -1,15 +1,15 @@
 import logging
+import random
+import time
 
-from selenium.webdriver.chrome.options import Options
 from fake_useragent import UserAgent
 
-def set_chrome_options() -> Options:
-    chrome_options = Options()
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    chrome_options.add_argument(f"user-agent={UserAgent().random}")
-    return chrome_options
+def set_header() -> dict[str, str]:
+    return {
+        "User-Agent": UserAgent().random,
+        "Accept-Language": "ko-KR,ko;q=0.8,en-US;q=0.5,en;q=0.3"
+    }
+
 
 def setup_logging() -> logging.Logger:
     logging.basicConfig(
@@ -17,3 +17,6 @@ def setup_logging() -> logging.Logger:
         level=logging.INFO
     )
     return logging.getLogger(__name__)
+
+def crawling_waiting_time() -> None:
+    return time.sleep(random.randint(1, 3))
