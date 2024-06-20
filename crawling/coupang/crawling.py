@@ -3,7 +3,6 @@ import time
 import random
 import requests
 
-from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 
 from crawling.config.config import *
@@ -15,7 +14,6 @@ def construct_url(category_id, page):
             f'?listSize=120&brand=&offerCondition=&filterType='
             f'&isPriceRange=false&minPrice=&maxPrice=&channel=user'
             f'&fromComponent=N&selectedPlpKeepFilter=&sorter=bestAsc&filter=&component=194186&rating=0&page={page}')
-
 
 def setup_categories_id():
     return [
@@ -30,21 +28,38 @@ def setup_categories_id():
         194744, 194745, 194746, 194812
     ]
 
+def requests_get_html(url):
+    response = requests.get(url, headers=set_header())
+    response.raise_for_status()
+    return response.text
+
+
+def check_last_page(category_id):
+    response = requests.get(construct_url(category_id, 1), headers=set_header())
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, 'html.parser')
+    page = soup.find('div', class_='product-list-paging')
+    return int(page['data-total'])
+
+def get_last_pages(categories_id):
+    last_pages = []
+    for category_id in categories_id:
+        last_pages.append(check_last_page(category_id))
+    return last_pages
+
+def create_url_list(categories_id, last_pages):
+    url_list = []
+    for category_id, last_page in zip(categories_id, last_pages):
+        for page in range(1, last_page + 1):
+            url_list.append(construct_url(category_id, page))
+    return url_list
+
 class CoupangCrawler:
     def __init__(self, max_pages=10):
         self.categories_id = setup_categories_id()
         self.logger = setup_logging()
         self.max_pages = max_pages
         self.database_manager = DatabaseManager(db_config=db_config)
-
-    def check_last_page(self, category_id):
-        response = requests.get(construct_url(category_id, 1), headers=set_header())
-        response.raise_for_status()
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            page = soup.find('div', class_='product-list-paging')
-            return int(page['data-total'])
-        return 1
 
     def crawl(self):
         try:
@@ -55,16 +70,15 @@ class CoupangCrawler:
             self.database_manager.close()
 
     def crawl_category(self, category_id):
-        last_page = self.check_last_page(category_id)
-        time.sleep(random.randint(1, 3))
+        last_page = check_last_page(category_id)
+        crawling_waiting_time()
         for page in range(1, min(last_page, self.max_pages) + 1):
-            self.crawl_page(category_id, page)
             logging.info(f"------category_id: {category_id}, page: {page}------")
-            time.sleep(random.randint(1, 3))
+            self.crawl_page(category_id, page)
+            crawling_waiting_time()
 
     def crawl_page(self, category_id, page):
-        url = construct_url(category_id, page)
-        response = requests.get(url, headers=set_header())
+        response = requests.get(construct_url(category_id, page), headers=set_header())
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         items = soup.find('ul', id='productList').find_all('li')
@@ -93,14 +107,6 @@ class CoupangCrawler:
                 self.logger.info(
                     f"category_id: {category_id}, product_id: {product_id}, title: {title}, price: {price}, "
                     f"per_price: {per_price}, star: {star}, review_cnt: {review_count}")
-
-                self.database_manager.insert_product(int(product_id),
-                                                     title,
-                                                     price,
-                                                     per_price,
-                                                     float(star),
-                                                     int(review_count),
-                                                     category_id)
 
             except Exception:
                 # 리뷰, 별점 등의 정보가 없는 경우
