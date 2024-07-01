@@ -36,4 +36,9 @@ with DAG(
         python_callable=crawling.create_url_list,
     )
 
-    get_last_pages_task >> create_url_list
+    coupang_crawling = PythonOperator(
+        task_id='coupang_crawling',
+        python_callable=crawling.crawl
+    )
+
+    get_last_pages_task >> create_url_list >> coupang_crawling
