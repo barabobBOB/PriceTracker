@@ -4,12 +4,11 @@ import time
 
 from fake_useragent import UserAgent
 
-def set_header() -> dict[str, str]:
+def set_header():
     return {
         "User-Agent": UserAgent().random,
         "Accept-Language": "ko-KR,ko;q=0.8,en-US;q=0.5,en;q=0.3"
     }
-
 
 def setup_logging() -> logging.Logger:
     logging.basicConfig(

@@ -3,8 +3,7 @@ import requests
 
 from bs4 import BeautifulSoup
 
-from crawling.config.config import *
-from crawling.database.manager import DatabaseManager, db_config
+from ..config.config import set_header, setup_logging, crawling_waiting_time
 
 
 def construct_url(category_id, page):
@@ -39,15 +38,13 @@ def check_last_page(category_id):
     page = soup.find('div', class_='product-list-paging')
     return int(page['data-total'])
 
-def get_last_pages(categories_id):
-    last_pages = []
-    for category_id in categories_id:
-        last_pages.append(check_last_page(category_id))
-    return last_pages
+def get_last_pages():
+    categories_id = setup_categories_id()
+    return [check_last_page(category_id) for category_id in categories_id]
 
-def create_url_list(categories_id, last_pages):
+def create_url_list(last_pages):
     url_list = []
-    for category_id, last_page in zip(categories_id, last_pages):
+    for category_id, last_page in zip(setup_categories_id(), last_pages):
         for page in range(1, last_page + 1):
             url_list.append(construct_url(category_id, page))
     return url_list
@@ -57,21 +54,15 @@ class CoupangCrawler:
         self.categories_id = setup_categories_id()
         self.logger = setup_logging()
         self.max_pages = max_pages
-        self.database_manager = DatabaseManager(db_config=db_config)
 
     def crawl(self):
-        try:
-            self.database_manager.connect()
-            for category_id in self.categories_id:
-                self.crawl_category(category_id)
-        finally:
-            self.database_manager.close()
+        for category_id in self.categories_id:
+            self.crawl_category(category_id)
 
     def crawl_category(self, category_id):
         last_page = check_last_page(category_id)
         crawling_waiting_time()
         for page in range(1, min(last_page, self.max_pages) + 1):
-            logging.info(f"------category_id: {category_id}, page: {page}------")
             self.crawl_page(category_id, page)
             crawling_waiting_time()
 
