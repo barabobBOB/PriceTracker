@@ -1,7 +1,7 @@
 import requests
 
 from bs4 import BeautifulSoup
-from ..config.config import set_header, setup_logging, crawling_waiting_time
+from ..config.set_up import set_header, setup_logging, crawling_waiting_time
 from ..database.handler import DatabaseHandler
 
 

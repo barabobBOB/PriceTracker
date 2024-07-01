@@ -4,7 +4,7 @@ import time
 
 from fake_useragent import UserAgent
 
-def set_header():
+def set_header() -> dict[str, str]:
     return {
         "User-Agent": UserAgent().random,
         "Accept-Language": "ko-KR,ko;q=0.8,en-US;q=0.5,en;q=0.3"
