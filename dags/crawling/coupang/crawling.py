@@ -38,11 +38,15 @@ def check_last_page(category_id):
     page = soup.find('div', class_='product-list-paging')
     return int(page['data-total'])
 
-def get_last_pages():
+def get_last_pages(**context):
     categories_id = setup_categories_id()
-    return [check_last_page(category_id) for category_id in categories_id]
+    last_pages = [check_last_page(category_id) for category_id in categories_id]
+    context["task_instance"].xcom_push(key="last_pages", value=last_pages)
 
-def create_url_list(last_pages):
+def create_url_list(**context):
+    last_pages = context["task_instance"].xcom_pull(
+        task_ids="get_last_pages", key="last_pages"
+    )
     url_list = []
     for category_id, last_page in zip(setup_categories_id(), last_pages):
         for page in range(1, last_page + 1):
