@@ -17,19 +17,27 @@ class DatabaseHandler:
             per_price TEXT,
             star FLOAT,
             review_count TEXT,
-            category_id BIGINT
+            category_id BIGINT,
+            collection_datetime TIMESTAMP
         )
         """
         self.hook.run(query)
         self.logger.info("Table coupang_products created successfully.")
 
-    def insert_product(self, product_id, title, price, per_price, star, review_count, category_id):
+    def insert_product(self, product):
         query = """
-        INSERT INTO coupang_products (product_id, title, price, per_price, star, review_count, category_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO coupang_products (product_id, title, price, per_price, star, review_count, category_id, collection_datetime)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
-        self.hook.run(query, parameters=(product_id, title, price, per_price, star, review_count, category_id))
-        self.logger.info(f"Product {title} inserted successfully.")
+        self.hook.run(query, parameters=(product["product_id"],
+                                         product["title"],
+                                         product["price"],
+                                         product["per_price"],
+                                         product["star"],
+                                         product["review_count"],
+                                         product["category_id"],
+                                         product["collection_datetime"]))
+        self.logger.info(f"Product {product['title']} inserted successfully.")
 
     def insert_error(self, idx, **context):
         query = """

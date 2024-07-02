@@ -1,3 +1,5 @@
+import logging
+
 import pendulum
 
 from airflow import DAG
@@ -19,8 +21,8 @@ categories_id = [194286, 194287, 194290, 194291, 194292, 194296, 194302, 194303,
                  194713, 194730, 194731, 194732, 194733, 194736, 194737, 194738, 194742, 194743,
                  194744, 194745, 194746, 194812]
 
-category_data = int(len(categories_id) / 4)
-data = [categories_id[i * category_data: category_data * (i + 1)] for i in range(4)]
+category_data = int(len(categories_id) / 7)
+data = [categories_id[i * category_data: category_data * (i + 1)] for i in range(7)]
 
 
 def error_branch(idx, **context):
@@ -28,7 +30,9 @@ def error_branch(idx, **context):
         error_log = context["task_instance"].xcom_pull(key="error_log_" + idx)
         if not error_log["success"]:
             return "error_db_insert_" + str(error_log["index"])
-    except:
+    except KeyError:
+        logging.log("왜 접근 안돼...")
+    except Exception:
         return "success_crawling_" + str(idx)
 
 
@@ -51,6 +55,7 @@ def copang_with_dag(data: list[list[int]], dag: DAG, start_dag: DAG):
             task_id='get_last_pages_' + idx,
             op_kwargs={"categories_id": data[i], "idx": idx},
             python_callable=crawling.get_last_pages,
+            provide_context=True,
             dag=dag
         )
 
@@ -58,6 +63,7 @@ def copang_with_dag(data: list[list[int]], dag: DAG, start_dag: DAG):
             task_id='create_url_list_' + idx,
             op_kwargs={"categories_id": data[i], "idx": idx},
             python_callable=crawling.create_url_list,
+            provide_context=True,
             dag=dag
         )
 
@@ -65,6 +71,7 @@ def copang_with_dag(data: list[list[int]], dag: DAG, start_dag: DAG):
             task_id='coupang_crawling_' + idx,
             op_kwargs={"idx": idx},
             python_callable=crawling.CoupangCrawler().crawl,
+            provide_context=True,
             dag=dag
         )
 
@@ -72,6 +79,7 @@ def copang_with_dag(data: list[list[int]], dag: DAG, start_dag: DAG):
             task_id="error_log_branch_" + idx,
             op_kwargs={"idx": idx},
             python_callable=error_branch,
+            provide_context=True,
             dag=dag
         )
 
@@ -79,6 +87,7 @@ def copang_with_dag(data: list[list[int]], dag: DAG, start_dag: DAG):
             task_id="error_db_insert_" + idx,
             op_kwargs={"idx": idx},
             python_callable=DatabaseHandler().insert_error,
+            provide_context=True,
             dag=dag,
         )
 
