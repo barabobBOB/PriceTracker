@@ -30,3 +30,19 @@ class DatabaseHandler:
         """
         self.hook.run(query, parameters=(product_id, title, price, per_price, star, review_count, category_id))
         self.logger.info(f"Product {title} inserted successfully.")
+
+    def insert_error(self, idx, **context):
+        query = """
+        INSERT INTO error_log (error_message, failed_url, index, success, timestamp)
+        VALUES (%s, %s, %s, %s, %s)
+        """
+        error_info = context["task_instance"].xcom_pull(key="error_log_" + idx)
+        parameters = (
+            error_info["error_message"],
+            error_info["failed_url"],
+            error_info["index"],
+            error_info["success"],
+            error_info["timestamp"]
+        )
+        self.hook.run(query, parameters=parameters)
+        self.logger.info(f"Error logged: {error_info['error_message']}")

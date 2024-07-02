@@ -1,4 +1,5 @@
 import requests
+import datetime
 
 from bs4 import BeautifulSoup
 from ..config.set_up import set_header, setup_logging, crawling_waiting_time
@@ -51,15 +52,26 @@ class CoupangCrawler:
         )
         print("url", url_list)
         for url in url_list:
-            self.crawl_page(url[0], url[1])
+            self.crawl_page(url[0], url[1], idx)
             crawling_waiting_time()
 
-    def crawl_page(self, url, category_id):
+    def crawl_page(self, url, category_id, idx, **context):
         response = requests.get(url, headers=set_header())
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        items = soup.find('ul', id='productList').find_all('li')
-        self.extract_items(items, category_id)
+        try:
+            items = soup.find('ul', id='productList').find_all('li')
+            self.extract_items(items, category_id)
+        except AttributeError as e:
+            error_info = {
+                "error_message": str(e),
+                "failed_url": url,
+                "index": idx,
+                "success": False,
+                "timestamp": datetime.datetime.now()
+            }
+            context["task_instance"].xcom_push(key="error_log_" + idx, value=error_info)
+
 
     def extract_items(self, items, category_id):
         for item in items:
@@ -76,4 +88,3 @@ class CoupangCrawler:
             except Exception:
                 # 리뷰, 별점 등의 정보가 없는 경우
                 continue
-    # def find_data_element(item: ):
