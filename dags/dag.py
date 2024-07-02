@@ -1,10 +1,11 @@
 import pendulum
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
 from crawling.coupang import crawling
+from crawling.database.handler import DatabaseHandler
 
 kst = pendulum.timezone("Asia/Seoul")
 
@@ -20,6 +21,11 @@ categories_id = [194286, 194287, 194290, 194291, 194292, 194296, 194302, 194303,
 
 category_data = int(len(categories_id) / 4)
 data = [categories_id[i * category_data: category_data * (i + 1)] for i in range(4)]
+
+def error_branch(idx, **context):
+    error_log = context["task_instance"].xcom_pull(key="error_log_"+idx)
+    if not error_log["success"]:
+        return "error_db_insert_" + str(error_log["index"])
 
 
 default_args = {
@@ -56,7 +62,20 @@ def copang_with_dag(data: list[list[int]], dag: DAG, start_dag: DAG):
             dag=dag
         )
 
-        start_dag >> get_last_pages >> create_url_list >> coupang_crawling
+        error_log_branch = BranchPythonOperator(
+            task_id="error_log_branch_"+idx,
+            op_kwargs={"idx": idx},
+            python_callable=error_branch,
+            dag=dag
+        )
+
+        error_db_insert = PythonOperator(
+            task_id="error_db_insert_"+idx,
+            op_kwargs={"idx": idx},
+            python_callable=DatabaseHandler().insert_error
+        )
+
+        start_dag >> get_last_pages >> create_url_list >> coupang_crawling >> error_log_branch >> error_db_insert
 
     return dag
 
