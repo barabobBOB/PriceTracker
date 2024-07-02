@@ -50,7 +50,6 @@ class CoupangCrawler:
         url_list = context["task_instance"].xcom_pull(
             key="url_list_"+idx
         )
-        print("url", url_list)
         for url in url_list:
             self.crawl_page(url[0], url[1], idx)
             crawling_waiting_time()
