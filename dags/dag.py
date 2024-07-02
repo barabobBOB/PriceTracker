@@ -22,10 +22,14 @@ categories_id = [194286, 194287, 194290, 194291, 194292, 194296, 194302, 194303,
 category_data = int(len(categories_id) / 4)
 data = [categories_id[i * category_data: category_data * (i + 1)] for i in range(4)]
 
+
 def error_branch(idx, **context):
-    error_log = context["task_instance"].xcom_pull(key="error_log_"+idx)
-    if not error_log["success"]:
-        return "error_db_insert_" + str(error_log["index"])
+    try:
+        error_log = context["task_instance"].xcom_pull(key="error_log_" + idx)
+        if not error_log["success"]:
+            return "error_db_insert_" + str(error_log["index"])
+    except:
+        return "success_crawling_" + str(idx)
 
 
 default_args = {
@@ -38,44 +42,55 @@ default_args = {
     'retries': 1,
     'retry_delay': timedelta(minutes=5)
 }
+
+
 def copang_with_dag(data: list[list[int]], dag: DAG, start_dag: DAG):
     for i in range(len(data)):
         idx = str(i)
         get_last_pages = PythonOperator(
-            task_id='get_last_pages_'+idx,
+            task_id='get_last_pages_' + idx,
             op_kwargs={"categories_id": data[i], "idx": idx},
             python_callable=crawling.get_last_pages,
             dag=dag
         )
 
         create_url_list = PythonOperator(
-            task_id='create_url_list_'+idx,
+            task_id='create_url_list_' + idx,
             op_kwargs={"categories_id": data[i], "idx": idx},
             python_callable=crawling.create_url_list,
             dag=dag
         )
 
         coupang_crawling = PythonOperator(
-            task_id='coupang_crawling_'+idx,
+            task_id='coupang_crawling_' + idx,
             op_kwargs={"idx": idx},
             python_callable=crawling.CoupangCrawler().crawl,
             dag=dag
         )
 
         error_log_branch = BranchPythonOperator(
-            task_id="error_log_branch_"+idx,
+            task_id="error_log_branch_" + idx,
             op_kwargs={"idx": idx},
             python_callable=error_branch,
             dag=dag
         )
 
         error_db_insert = PythonOperator(
-            task_id="error_db_insert_"+idx,
+            task_id="error_db_insert_" + idx,
             op_kwargs={"idx": idx},
-            python_callable=DatabaseHandler().insert_error
+            python_callable=DatabaseHandler().insert_error,
+            dag=dag,
         )
 
-        start_dag >> get_last_pages >> create_url_list >> coupang_crawling >> error_log_branch >> error_db_insert
+        success_crawling = BashOperator(
+            task_id="success_crawling_" + idx,
+            bash_command="echo crawling success!!",
+            dag=dag,
+        )
+
+        start_dag >> get_last_pages >> create_url_list >> coupang_crawling >> error_log_branch
+        error_log_branch >> error_db_insert
+        error_log_branch >> success_crawling
 
     return dag
 
