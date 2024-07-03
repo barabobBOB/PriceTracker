@@ -2,12 +2,20 @@ import logging
 
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
+
 class DatabaseHandler:
-    def __init__(self):
+    """
+    데이터베이스와 상호작용을 합니다.
+    """
+
+    def __init__(self) -> None:
         self.hook = PostgresHook(postgres_conn_id='postgres_conn')
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def create_coupang_products(self):
+    def create_coupang_products(self) -> None:
+        """
+        쿠팡 상품 목록을 저장하는 테이블을 생성합니다.
+        """
         query = """
         CREATE TABLE IF NOT EXISTS coupang_products (
             id SERIAL PRIMARY KEY,
@@ -24,7 +32,10 @@ class DatabaseHandler:
         self.hook.run(query)
         self.logger.info("Table coupang_products created successfully.")
 
-    def insert_product(self, product):
+    def insert_product(self, product: dict) -> None:
+        """
+        쿠팡 사이트의 상품을 저장합니다.
+        """
         query = """
         INSERT INTO coupang_products (product_id, title, price, per_price, star, review_count, category_id, collection_datetime)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -39,7 +50,10 @@ class DatabaseHandler:
                                          product["collection_datetime"]))
         self.logger.info(f"Product {product['title']} inserted successfully.")
 
-    def insert_error(self, idx, **context):
+    def insert_error(self, idx: int, **context) -> None:
+        """
+        발생된 에러를 저장합니다.
+        """
         query = """
         INSERT INTO error_log (error_message, failed_url, index, success, timestamp)
         VALUES (%s, %s, %s, %s, %s)
