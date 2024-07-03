@@ -1,3 +1,4 @@
+import bs4
 import requests
 import datetime
 
@@ -6,20 +7,14 @@ from ..config.set_up import set_header, setup_logging, crawling_waiting_time
 from ..database.handler import DatabaseHandler
 
 
-def construct_url(category_id, page):
+def construct_url(category_id: int, page: int) -> str:
     return (f'https://www.coupang.com/np/categories/{category_id}'
             f'?listSize=120&brand=&offerCondition=&filterType='
             f'&isPriceRange=false&minPrice=&maxPrice=&channel=user'
             f'&fromComponent=N&selectedPlpKeepFilter=&sorter=bestAsc&filter=&component=194186&rating=0&page={page}')
 
 
-def requests_get_html(url):
-    response = requests.get(url, headers=set_header())
-    response.raise_for_status()
-    return response.text
-
-
-def check_last_page(category_id):
+def check_last_page(category_id: int) -> int:
     response = requests.get(construct_url(category_id, 1), headers=set_header())
     crawling_waiting_time()
     response.raise_for_status()
@@ -28,12 +23,12 @@ def check_last_page(category_id):
     return int(page['data-total'])
 
 
-def get_last_pages(categories_id, idx, **context):
+def get_last_pages(categories_id: int, idx: int, **context) -> None:
     last_pages = [check_last_page(category_id) for category_id in categories_id]
     context["task_instance"].xcom_push(key="last_pages_" + idx, value=last_pages)
 
 
-def create_url_list(categories_id, idx, **context):
+def create_url_list(categories_id: list[int], idx: int, **context) -> None:
     last_pages = context["task_instance"].xcom_pull(
         key="last_pages_" + idx
     )
@@ -46,27 +41,28 @@ def create_url_list(categories_id, idx, **context):
 
 
 class CoupangCrawler:
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = setup_logging()
         self.db_handler = DatabaseHandler()
         self.db_handler.create_coupang_products()
 
-    def crawl(self, idx, **context):
+    def crawl(self, idx: int, **context) -> None:
         url_list = context["task_instance"].xcom_pull(
             key="url_list_" + idx
         )
         collection_datetime = datetime.datetime.now()
         for url in url_list:
-            self.crawl_page(url[0], url[1], idx, collection_datetime)
+            self.crawl_page(url[0], url[1], idx, collection_datetime, **context)
             crawling_waiting_time()
 
-    def crawl_page(self, url, category_id, idx, collection_datetime, **context):
+    def crawl_page(self, url: str, category_id: int, idx: int, collection_datetime: datetime, **context) -> None:
         response = requests.get(url, headers=set_header())
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         try:
             items = soup.find('ul', id='productList').find_all('li')
             self.extract_items(items, category_id, collection_datetime)
+
         except AttributeError as e:
             error_info = {
                 "error_message": str(e),
@@ -77,7 +73,7 @@ class CoupangCrawler:
             }
             context["task_instance"].xcom_push(key="error_log_" + idx, value=error_info)
 
-    def extract_items(self, items, category_id, collection_datetime):
+    def extract_items(self, items: list[bs4.BeautifulSoup], category_id: int, collection_datetime: datetime) -> None:
         product = {}
         for item in items:
             try:
