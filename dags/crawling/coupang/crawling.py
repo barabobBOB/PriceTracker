@@ -1,15 +1,13 @@
-import json
 import bs4
 import requests
 import datetime
-import logging
 import re
 
 from bs4 import BeautifulSoup
+
+from ..config.kafka_produce import produce_to_kafka
 from ..config.set_up import set_header, setup_logging, crawling_waiting_time
 from ..database.handler import DatabaseHandler
-from kafka import KafkaProducer
-
 
 def construct_url(category_id: int, page: int) -> str:
     return (f'https://www.coupang.com/np/categories/{category_id}'
@@ -42,30 +40,6 @@ def create_url_list(categories_id: list[int], idx: str, **context) -> None:
         for page in range(1, last_page + 1)
     ]
     context["task_instance"].xcom_push(key="url_list_" + idx, value=url_list)
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def produce_to_kafka(data: dict) -> None:
-    logger.info("Kafka producer를 생성합니다.")
-    producer = KafkaProducer(
-        bootstrap_servers='kafka:29092',
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
-    try:
-        if data:
-            logger.info("데이터를 Kafka 토픽으로 전송합니다: %s", data)
-            future = producer.send('coupang_crawling_topic', value=data)
-            logger.info("Kafka로 데이터 전송을 플러시합니다.")
-            producer.flush()
-            logger.info("데이터 전송이 성공적으로 완료되었습니다.")
-    except Exception as e:
-        logger.error("Kafka로 데이터 전송 중 오류 발생: %s", e)
-    finally:
-        logger.info("Kafka producer를 닫습니다.")
-        producer.close()
-
 
 class CoupangCrawler:
     def __init__(self) -> None:
