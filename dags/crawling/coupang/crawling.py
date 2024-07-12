@@ -47,7 +47,6 @@ def create_url_list(categories_id: list[int], idx: str, **context) -> None:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 def produce_to_kafka(data: dict) -> None:
     logger.info("Kafka producer를 생성합니다.")
     producer = KafkaProducer(
@@ -123,6 +122,8 @@ class CoupangCrawler:
                 product["collection_datetime"] = collection_datetime
 
                 self.db_handler.insert_product(product)
+
+                product["collection_datetime"] = str(collection_datetime)
                 produce_to_kafka(product)
 
             except Exception:
