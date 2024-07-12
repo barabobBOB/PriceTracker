@@ -21,10 +21,10 @@ class DatabaseHandler:
             id SERIAL PRIMARY KEY,
             product_id BIGINT,
             title TEXT,
-            price TEXT,
-            per_price TEXT,
+            price BIGINT,
+            per_price BIGINT,
             star FLOAT,
-            review_count TEXT,
+            review_count BIGINT,
             category_id BIGINT,
             collection_datetime TIMESTAMP
         )

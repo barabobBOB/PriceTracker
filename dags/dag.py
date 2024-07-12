@@ -1,15 +1,17 @@
-import pendulum
+from __future__ import annotations
 
+import pendulum
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
 from crawling.coupang import crawling
 from crawling.database.handler import DatabaseHandler
+from typing import List
 
 kst = pendulum.timezone("Asia/Seoul")
 
-def category_division(division_count: int) -> list[list[int]]:
+def category_division(division_count: int) -> List[List[int]]:
     categories_id = [194286, 194287, 194290, 194291, 194292, 194296, 194302, 194303, 194310, 194311,
                      194312, 194313, 194319, 194322, 194324, 194328, 194329, 194330, 194333, 194334,
                      194335, 194340, 194341, 194344, 194436, 194437, 194438, 194447, 194448, 194456,
@@ -23,9 +25,9 @@ def category_division(division_count: int) -> list[list[int]]:
     return [categories_id[i * category_data: category_data * (i + 1)] for i in range(division_count)]
 
 
-def error_branch(idx: int, **context) -> str:
+def error_branch(idx: int, **context: dict) -> str:
     try:
-        error_log = context["task_instance"].xcom_pull(key="error_log_" + idx)
+        error_log = context["task_instance"].xcom_pull(key="error_log_" + str(idx))
         if not error_log["success"]:
             return "error_db_insert_" + str(error_log["index"])
     except Exception:
@@ -44,7 +46,7 @@ default_args = {
 }
 
 
-def coupang_with_dag(data: list[list[int]], dag: DAG, start_dag: BashOperator):
+def coupang_with_dag(data: List[List[int]], dag: DAG, start_dag: BashOperator) -> DAG:
     for i in range(len(data)):
         idx = str(i)
         get_last_pages = PythonOperator(
