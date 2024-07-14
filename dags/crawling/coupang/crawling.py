@@ -5,7 +5,7 @@ import re
 
 from bs4 import BeautifulSoup
 
-from ..config.kafka_produce import produce_to_kafka
+from ..config.kafka_produce import produce_to_kafka, make_topic
 from ..config.set_up import set_header, setup_logging, crawling_waiting_time
 from ..database.handler import DatabaseHandler
 
@@ -62,7 +62,7 @@ class CoupangCrawler:
         soup = BeautifulSoup(response.text, 'html.parser')
         try:
             items = soup.find('ul', id='productList').find_all('li')
-            self.extract_items(items, category_id, collection_datetime)
+            self.extract_items(idx, items, category_id, collection_datetime)
 
         except AttributeError as e:
             error_info = {
@@ -74,7 +74,7 @@ class CoupangCrawler:
             }
             context["task_instance"].xcom_push(key="error_log_" + idx, value=error_info)
 
-    def extract_items(self, items: list[bs4.BeautifulSoup], category_id: int, collection_datetime: datetime) -> None:
+    def extract_items(self, idx: str, items: list[bs4.BeautifulSoup], category_id: int, collection_datetime: datetime) -> None:
         product = {}
         for item in items:
             try:
@@ -98,7 +98,7 @@ class CoupangCrawler:
                 self.db_handler.insert_product(product)
 
                 product["collection_datetime"] = str(collection_datetime)
-                produce_to_kafka(product)
+                produce_to_kafka(product, make_topic("coupang", idx))
 
             except Exception:
                 # 리뷰, 별점 등의 정보가 없는 경우
