@@ -35,8 +35,6 @@ x-airflow-common:
       condition: service_healthy
     postgres:
       condition: service_healthy
-  networks:
-    - kafka-network
 
 services:
   postgres:
@@ -55,8 +53,6 @@ services:
       retries: 5
       start_period: 5s
     restart: always
-    networks:
-      - kafka-network
 
   redis:
     image: redis:latest
@@ -69,8 +65,6 @@ services:
       retries: 50
       start_period: 30s
     restart: always
-    networks:
-      - kafka-network
       
   airflow-webserver:
     <<: *airflow-common
@@ -90,8 +84,6 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-    networks:
-      - kafka-network
 
   airflow-scheduler:
     <<: *airflow-common
@@ -107,8 +99,6 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-    networks:
-      - kafka-network
 
   airflow-worker:
     <<: *airflow-common
@@ -132,8 +122,6 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-    networks:
-      - kafka-network
 
   airflow-triggerer:
     <<: *airflow-common
@@ -149,8 +137,6 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-    networks:
-      - kafka-network
 
   airflow-init:
     <<: *airflow-common
@@ -214,8 +200,6 @@ services:
     user: "0:0"
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}:/sources
-    networks:
-      - kafka-network
 
   airflow-cli:
     <<: *airflow-common
@@ -229,63 +213,6 @@ services:
       - bash
       - -c
       - airflow
-    networks:
-      - kafka-network
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:6.2.0
-    hostname: zookeeper
-    container_name: zookeeper
-    environment:
-      ZOOKEEPER_SERVER_ID: 1
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_DATA_DIR: kafkalogging/zookeeper/data
-      ZOOKEEPER_SERVERS: zookeeper:22181:2181
-    ports:
-      - "22181:2181"
-    volumes:
-      - .kafkalogging/zookeeper/data/1:/zookeeper/data
-    networks:
-      - kafka-network
-
-  kafka:
-    image: confluentinc/cp-kafka:6.2.0
-    container_name: kafka
-    hostname: kafka
-    depends_on:
-      - zookeeper
-    ports:
-      - "29092:29092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
-      KAFKA_LOG_DIRS: kafkalogging/kafka
-    volumes:
-      - .kafkalogging/kafka/logs/1:/kafka
-    networks:
-      - kafka-network
-
-  akhq:
-    image: tchiotludo/akhq:latest
-    hostname: akhq
-    depends_on:
-      - kafka
-    environment:
-      AKHQ_CONFIGURATION: |
-        akhq:
-          connections:
-            kafka:
-              properties:
-                bootstrap.servers: kafka:29092
-    ports:
-      - 8081:8080
-    networks:
-      - kafka-network
 
 volumes:
   postgres-db-volume:
-
-networks:
-  kafka-network:
-    driver: bridge
