@@ -5,6 +5,7 @@ import re
 
 from bs4 import BeautifulSoup
 
+from ..config.kafka_produce import produce_to_kafka
 from ..config.set_up import set_header, setup_logging, crawling_waiting_time
 from ..database.handler import DatabaseHandler
 
@@ -97,6 +98,7 @@ class CoupangCrawler:
                 self.db_handler.insert_product(product)
 
                 product["collection_datetime"] = str(collection_datetime)
+                produce_to_kafka(product)
 
             except Exception:
                 # 리뷰, 별점 등의 정보가 없는 경우
