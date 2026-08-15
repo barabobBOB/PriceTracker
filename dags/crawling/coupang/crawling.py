@@ -2,6 +2,10 @@ import bs4
 import requests
 import datetime
 import re
+import os
+
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from bs4 import BeautifulSoup
 
@@ -51,13 +55,21 @@ class CoupangCrawler:
             key="url_list_" + idx
         )
         collection_datetime = datetime.datetime.now()
+        raw_data: list[dict] = []
         for url in url_list:
-            self.crawl_page(url[0], url[1], idx, collection_datetime, **context)
+            self.crawl_page(url[0], url[1], idx, collection_datetime, raw_data, **context)
             crawling_waiting_time()
+        self.save_raw_data(idx, raw_data)
 
-    def crawl_page(self, url: str, category_id: int, idx: str, collection_datetime: datetime, **context) -> None:
+    def crawl_page(self, url: str, category_id: int, idx: str, collection_datetime: datetime, raw_data: list[dict], **context) -> None:
         response = requests.get(url, headers=set_header())
         response.raise_for_status()
+        raw_data.append({
+            "url": url,
+            "category_id": category_id,
+            "raw_html": response.text,
+            "collection_datetime": collection_datetime,
+        })
         soup = BeautifulSoup(response.text, 'html.parser')
         try:
             items = soup.find('ul', id='productList').find_all('li')
@@ -72,6 +84,25 @@ class CoupangCrawler:
                 "timestamp": collection_datetime
             }
             context["task_instance"].xcom_push(key="error_log_" + idx, value=error_info)
+
+    def save_raw_data(self, idx: str, raw_data: list[dict]) -> None:
+        if not raw_data:
+            return
+
+        raw_data_dir = os.environ.get("RAW_DATA_DIR", "raw_data")
+        os.makedirs(raw_data_dir, exist_ok=True)
+        file_path = os.path.join(raw_data_dir, f"coupang_raw_{idx}.parquet")
+
+        table = pa.table(
+            {
+                "url": [record["url"] for record in raw_data],
+                "category_id": [record["category_id"] for record in raw_data],
+                "raw_html": [record["raw_html"] for record in raw_data],
+                "collection_datetime": [record["collection_datetime"] for record in raw_data],
+            }
+        )
+        pq.write_table(table, file_path)
+        self.logger.info(f"Raw data saved to {file_path}")
 
     def extract_items(self, items: list[bs4.BeautifulSoup], category_id: int, collection_datetime: datetime) -> None:
         product = {}
